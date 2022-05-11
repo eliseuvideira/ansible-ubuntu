@@ -1,0 +1,119 @@
+---
+- name: Setup Ubuntu Server
+  hosts: servers
+  remote_user: root
+  tasks:
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install Packages
+      apt:
+        name:
+          - bash
+          - curl
+          - docker
+          - git
+          - less
+          - make
+          - neovim
+          - rsync
+          - stow
+          - sudo
+          - tmux
+          - vim
+          - zsh
+        state: latest
+        update_cache: true
+
+    - name: Create Group 'wheel'
+      group:
+        name: wheel
+        state: present
+
+    - name: Allow 'wheel' to have sudo privileges
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: "^%sudo"
+        line: "%wheel ALL=(ALL) NOPASSWD: ALL"
+        validate: "/usr/sbin/visudo -cf %s"
+
+    - name: Create Group 'docker'
+      group:
+        name: docker
+        state: present
+
+    - name: Create User
+      user:
+        name: "{{ username }}"
+        shell: /bin/zsh
+        groups: wheel,docker
+        append: true
+
+    - name: Install Docker Pre Requisites
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: true
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable
+        state: present
+        filename: docker
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: latest
+        update_cache: true
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: u+x,g+x,o+x
+
+    - name: Enable and Start Docker
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Install Oh My Zsh
+      git:
+        repo: https://github.com/ohmyzsh/ohmyzsh.git
+        dest: /usr/share/oh-my-zsh
+        depth: 1
+
+    - name: Configure Zsh and Vim
+      become: true
+      become_user: "{{ username }}"
+      git:
+        repo: https://github.com/eliseuvideira/.dotfiles-alpine
+        dest: ~/.dotfiles
+      notify: Install .dotfiles
+
+  handlers:
+    - name: Install .dotfiles
+      become: true
+      become_user: "{{ username }}"
+      shell: |
+        #!/bin/sh
+        cd ~/.dotfiles && make install

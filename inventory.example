@@ -1,0 +1,5 @@
+[servers]
+10.0.10.101
+
+[servers:vars]
+username=ubuntu
